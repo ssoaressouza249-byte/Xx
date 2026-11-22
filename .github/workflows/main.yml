@@ -1,0 +1,58 @@
+name: Build APK Ower OTMX
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Unzip project archive
+        run: |
+          ZIP_FILE=$(find . -maxdepth 1 -name "*.zip" | head -n 1)
+          if [ -n "$ZIP_FILE" ]; then
+            unzip -q "$ZIP_FILE" -d temp_extract
+            if [ -f "temp_extract/settings.gradle.kts" ] || [ -f "temp_extract/settings.gradle" ]; then
+              cp -rn temp_extract/* .
+            else
+              SUBDIR=$(find temp_extract -mindepth 1 -maxdepth 1 -type d | head -n 1)
+              cp -rn "$SUBDIR"/* .
+            fi
+            rm -rf temp_extract "$ZIP_FILE"
+          fi
+
+      - name: Clean template extras and enforce SDK 36
+        run: |
+          find . -name "*.gradle*" -type f -exec sed -i '/google-services/d' {} +
+          find . -name "*.gradle*" -type f -exec sed -i '/secrets-gradle-plugin/d' {} +
+          find . -name "*.gradle*" -type f -exec sed -i '/secrets/d' {} +
+          find . -name "*.gradle*" -type f -exec sed -i '/debug\.keystore/d' {} +
+          find . -name "*.gradle*" -type f -exec sed -i 's/compileSdk\s*=\s*[0-9]\+/compileSdk = 36/g' {} +
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Build Debug APK
+        run: gradle assembleDebug --no-daemon
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ower-OTMX-Debug-APK
+          path: app/build/outputs/apk/debug/*.apk
+
+          
